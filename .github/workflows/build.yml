@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pyinstaller
-      - run: pyinstaller --onefile --windowed --name Traduction traduction.py
+      - run: pyinstaller --onefile --windowed --name Traduction --icon icone.ico --add-data "icone.ico;." traduction.py
       - uses: actions/upload-artifact@v4
         with:
           name: Traduction-exe

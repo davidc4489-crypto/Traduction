@@ -1,6 +1,8 @@
 """Petit traducteur Français / English / עברית avec bouton de copie."""
 
 import json
+import os
+import sys
 import threading
 import tkinter as tk
 import urllib.parse
@@ -11,6 +13,7 @@ LANGUES = {"Français": "fr", "English": "en", "עברית (Hébreu)": "iw"}
 NOMS = list(LANGUES)
 URL = "https://translate.googleapis.com/translate_a/single"
 TAILLE_BLOC = 4000
+ICONE = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "icone.ico")
 
 
 def _traduire_bloc(texte, source, cible):
@@ -45,6 +48,11 @@ class Application(tk.Tk):
         self.title("Traduction  FR ⇄ EN ⇄ HE")
         self.geometry("760x560")
         self.minsize(520, 420)
+        if os.path.exists(ICONE):
+            try:
+                self.iconbitmap(ICONE)
+            except tk.TclError:
+                pass
 
         style = ttk.Style(self)
         if "vista" in style.theme_names():

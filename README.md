@@ -29,4 +29,4 @@ Le workflow GitHub Actions construit l'exe à chaque push. Pour publier une rele
 git tag v1.0.1 && git push --tags
 ```
 
-Ou localement sous Windows : `pip install pyinstaller` puis `pyinstaller --onefile --windowed --name Traduction traduction.py`.
+Ou localement sous Windows : `pip install pyinstaller` puis `pyinstaller --onefile --windowed --name Traduction --icon icone.ico --add-data "icone.ico;." traduction.py`.
