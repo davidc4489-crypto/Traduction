@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sys
 import threading
 import tkinter as tk
@@ -13,11 +14,12 @@ LANGUES = {"Français": "fr", "English": "en", "עברית (Hébreu)": "iw"}
 NOMS = list(LANGUES)
 URL = "https://translate.googleapis.com/translate_a/single"
 TAILLE_BLOC = 4000
+MAX_PHRASES_VARIANTES = 10
 ICONE = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "icone.ico")
 
 
-def _traduire_bloc(texte, source, cible):
-    params = urllib.parse.urlencode({"client": "gtx", "sl": source, "tl": cible, "dt": "t"})
+def _requete(texte, source, cible, types):
+    params = urllib.parse.urlencode([("client", "gtx"), ("sl", source), ("tl", cible)] + [("dt", t) for t in types])
     donnees = urllib.parse.urlencode({"q": texte}).encode("utf-8")
     requete = urllib.request.Request(
         f"{URL}?{params}",
@@ -25,8 +27,7 @@ def _traduire_bloc(texte, source, cible):
         headers={"User-Agent": "Mozilla/5.0", "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
     )
     with urllib.request.urlopen(requete, timeout=20) as reponse:
-        resultat = json.loads(reponse.read().decode("utf-8"))
-    return "".join(segment[0] for segment in resultat[0] if segment[0])
+        return json.loads(reponse.read().decode("utf-8"))
 
 
 def traduire(texte, source, cible):
@@ -39,14 +40,34 @@ def traduire(texte, source, cible):
         courant += ligne
     if courant:
         blocs.append(courant)
-    return "".join(_traduire_bloc(bloc, source, cible) for bloc in blocs)
+    return "".join(
+        "".join(segment[0] for segment in _requete(bloc, source, cible, ["t"])[0] if segment[0])
+        for bloc in blocs
+    )
+
+
+def variantes(texte, source, cible):
+    """Autres formulations proposées par Google, phrase par phrase : [(phrase, [options])].
+
+    Google ne les donne que pour une phrase isolée ; on se limite aux textes courts."""
+    phrases = [p for p in re.split(r"(?<=[.!?…])\s+|\n+", texte) if p.strip()]
+    if len(phrases) > MAX_PHRASES_VARIANTES:
+        return []
+    resultat = []
+    for phrase in phrases:
+        reponse = _requete(phrase, source, cible, ["at"])
+        for segment in reponse[5] if len(reponse) > 5 and reponse[5] else []:
+            options = [option[0] for option in (segment[2] or [])[1:] if option and option[0]]
+            if options:
+                resultat.append((segment[0], options))
+    return resultat
 
 
 class Application(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Traduction  FR ⇄ EN ⇄ HE")
-        self.geometry("760x560")
+        self.geometry("780x720")
         self.minsize(520, 420)
         if os.path.exists(ICONE):
             try:
@@ -88,10 +109,18 @@ class Application(tk.Tk):
         self.sortie = tk.Text(self, height=9, wrap="word", font=police, state="disabled", background="#f4f4f4")
         self.sortie.pack(fill="both", expand=True, padx=10)
 
+        ttk.Label(
+            self, text="Vérification : retraduction dans la langue d'origine et autres formulations",
+            padding=(10, 8, 10, 2),
+        ).pack(anchor="w")
+        self.controle = tk.Text(self, height=6, wrap="word", font=("Segoe UI", 10), state="disabled",
+                                background="#f4f4f4", foreground="#333")
+        self.controle.pack(fill="both", expand=True, padx=10)
+
         self.statut = ttk.Label(self, text="", padding=(10, 4, 10, 8), foreground="#555")
         self.statut.pack(anchor="w")
 
-        for zone in (self.entree, self.sortie):
+        for zone in (self.entree, self.sortie, self.controle):
             zone.tag_configure("rtl", justify="right")
             zone.tag_configure("ltr", justify="left")
 
@@ -121,6 +150,7 @@ class Application(tk.Tk):
             self.entree.delete("1.0", "end")
             self.entree.insert("1.0", traduit)
             self.afficher("")
+            self.afficher_controle("", [], self.cible.get())
         self.ajuster_direction()
 
     def afficher(self, texte):
@@ -129,6 +159,24 @@ class Application(tk.Tk):
         self.sortie.insert("1.0", texte)
         self.aligner(self.sortie, self.cible.get())
         self.sortie.configure(state="disabled")
+
+    def afficher_controle(self, retraduction, variantes, langue_variantes):
+        self.controle.configure(state="normal")
+        self.controle.delete("1.0", "end")
+        if retraduction:
+            self.controle.insert("end", "Retraduction : ", "titre")
+            self.controle.insert("end", retraduction + "\n", "ltr" if LANGUES[self.source.get()] != "iw" else "rtl")
+        if variantes:
+            self.controle.insert("end", "\nAutres formulations possibles :\n", "titre")
+            rtl = LANGUES[langue_variantes] == "iw"
+            for phrase, options in variantes:
+                self.controle.insert("end", f"« {phrase.strip()} »\n", "phrase")
+                for option in options:
+                    self.controle.insert("end", f"   • {option}\n" if not rtl else f"{option} •   \n",
+                                         "rtl" if rtl else "ltr")
+        self.controle.tag_configure("titre", font=("Segoe UI", 10, "bold"))
+        self.controle.tag_configure("phrase", foreground="#777")
+        self.controle.configure(state="disabled")
 
     def lancer(self):
         texte = self.entree.get("1.0", "end-1c").strip()
@@ -141,7 +189,9 @@ class Application(tk.Tk):
 
         def travail():
             try:
-                resultat, erreur = traduire(texte, source, cible), None
+                traduction = traduire(texte, source, cible)
+                retraduction = traduire(traduction, cible, source)
+                resultat, erreur = (traduction, variantes(texte, source, cible), retraduction), None
             except Exception as exc:  # réseau, quota, etc.
                 resultat, erreur = None, exc
             self.after(0, self.terminer, resultat, erreur)
@@ -153,7 +203,9 @@ class Application(tk.Tk):
         if erreur:
             self.statut.configure(text=f"Erreur : {erreur}  (vérifiez la connexion Internet)")
             return
-        self.afficher(resultat)
+        traduction, variantes, retraduction = resultat
+        self.afficher(traduction)
+        self.afficher_controle(retraduction, variantes, self.cible.get())
         self.statut.configure(text="Traduction terminée.")
 
     def copier(self):

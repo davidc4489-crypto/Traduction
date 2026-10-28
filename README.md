@@ -12,6 +12,9 @@ Dernier `Traduction.exe` : onglet **Releases** du dépôt. Double-cliquez dessus
 1. Choisissez la langue source et la langue cible (bouton ⇄ pour inverser).
 2. Tapez ou collez le texte, puis **Traduire** (ou `Ctrl+Entrée`).
 3. **📋 Copier la traduction** place le résultat dans le presse-papiers.
+4. La zone **Vérification** affiche :
+   - la **retraduction** du résultat dans la langue d'origine, pour vérifier que le sens est conservé (utile si vous ne lisez pas bien l'hébreu) ;
+   - les **autres formulations** proposées pour chaque phrase (textes de 10 phrases maximum), pour choisir la plus juste.
 
 Une connexion Internet est nécessaire (service Google Traduction).
 
